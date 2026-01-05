@@ -1,0 +1,251 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// User & Authentication
+// =============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  avatarUrl    String?
+  timezone     String   @default("UTC")
+  weekStartsOn String   @default("monday")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  githubConnection GitHubConnection?
+  repositories     UserRepository[]
+  events           GitHubEvent[]
+  weeks            Week[]
+  reviews          WeeklyReview[]
+  goals            Goal[]
+  habits           Habit[]
+  tags             Tag[]
+  reports          ExportReport[]
+
+  @@map("users")
+}
+
+model GitHubConnection {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  githubUsername      String
+  accessToken         String
+  lastSyncedAt        DateTime?
+  syncCursor          String?
+  rateLimitRemaining  Int?
+  rateLimitResetAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("github_connections")
+}
+
+// =============================================================================
+// Repositories
+// =============================================================================
+
+model Repository {
+  id           String @id @default(cuid())
+  githubRepoId String @unique
+  name         String
+  owner        String
+  visibility   String @default("public")
+
+  userRepositories UserRepository[]
+  events           GitHubEvent[]
+
+  @@map("repositories")
+}
+
+model UserRepository {
+  id              String  @id @default(cuid())
+  userId          String
+  repoId          String
+  repoName        String
+  repoOwner       String
+  included        Boolean @default(true)
+  excluded        Boolean @default(false)
+  defaultCategory String  @default("Development")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, repoId])
+  @@map("user_repositories")
+}
+
+// =============================================================================
+// GitHub Activity
+// =============================================================================
+
+model GitHubEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  weekId    String
+  repoId    String
+  repoName  String
+  eventType String
+  title     String
+  date      DateTime
+  url       String
+  status    String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  week       Week       @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@index([userId, weekId])
+  @@map("github_events")
+}
+
+// =============================================================================
+// Weeks & Reviews
+// =============================================================================
+
+model Week {
+  id        String    @id @default(cuid())
+  userId    String
+  startDate DateTime
+  endDate   DateTime
+  status    String    @default("open")
+  lockedAt  DateTime?
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events            GitHubEvent[]
+  review            WeeklyReview?
+  habitCompletions  HabitCompletion[]
+
+  @@unique([userId, startDate])
+  @@index([userId, startDate])
+  @@map("weeks")
+}
+
+model WeeklyReview {
+  id              String   @id @default(cuid())
+  userId          String
+  weekId          String   @unique
+  weekStartDate   DateTime
+  weekEndDate     DateTime
+  status          String   @default("incomplete")
+  completedAt     DateTime?
+  activitySummary Json
+  reflections     Json
+  targets         Json
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week Week @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@map("weekly_reviews")
+}
+
+// =============================================================================
+// Goals & Habits
+// =============================================================================
+
+model Goal {
+  id               String    @id @default(cuid())
+  userId           String
+  title            String
+  description      String?
+  status           String    @default("active")
+  targetDate       DateTime?
+  createdDate      DateTime  @default(now())
+  completedDate    DateTime?
+  createdFromReview String?
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags    GoalTag[]
+
+  @@index([userId, status])
+  @@map("goals")
+}
+
+model Habit {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  createdDate DateTime @default(now())
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completions HabitCompletion[]
+
+  @@map("habits")
+}
+
+model HabitCompletion {
+  id        String  @id @default(cuid())
+  habitId   String
+  weekId    String
+  completed Boolean @default(false)
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  week  Week  @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, weekId])
+  @@map("habit_completions")
+}
+
+// =============================================================================
+// Tags
+// =============================================================================
+
+model Tag {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+  color  String @default("slate")
+
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals GoalTag[]
+
+  @@unique([userId, name])
+  @@map("tags")
+}
+
+model GoalTag {
+  goalId String
+  tagId  String
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([goalId, tagId])
+  @@map("goal_tags")
+}
+
+// =============================================================================
+// Export & Reporting
+// =============================================================================
+
+model ExportReport {
+  id             String   @id @default(cuid())
+  userId         String
+  type           String
+  format         String
+  periodStart    DateTime
+  periodEnd      DateTime
+  generatedAt    DateTime @default(now())
+  fileSize       String
+  fileName       String
+  includeDetails Boolean  @default(false)
+  shareLink      Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, generatedAt])
+  @@map("export_reports")
+}
+
