@@ -14,7 +14,8 @@ import {
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout, isLoading } = useCurrentUser()
+  // using next-auth session for handling users
+  const { session, logout, isLoading } = useCurrentUser()
 
   const navigationItems: NavigationItem[] = [
     {
@@ -61,11 +62,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <AppShell
       navigationItems={navigationItems}
       user={
-        user
+        session && session.user
           ? {
-              name: user.name,
-              email: user.email,
-              avatarUrl: user.avatarUrl,
+              name: session.user.name || '',
+              email: session.user.email || '',
+              avatarUrl: session.user.image || undefined,
             }
           : undefined
       }

@@ -2,6 +2,9 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import type { User } from '@/lib/types/types'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import type { Session } from 'next-auth'
 
 interface UserPreferences {
   timezone: string
@@ -14,31 +17,32 @@ interface AuthContextType {
   updatePreferences: (prefs: Partial<UserPreferences>) => void
   logout: () => void
   isLoading: boolean
+  session?: Session | null // pass next-auth session in context
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Mock user for development
-const MOCK_USER: User = {
-  id: 'dev-user-1',
-  email: 'developer@devtrackr.com',
-  name: 'Dev User',
-  avatarUrl: undefined,
-  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  weekStartsOn: 'monday',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [preferences, setPreferences] = useState<UserPreferences>({
-    timezone: MOCK_USER.timezone,
-    weekStartsOn: MOCK_USER.weekStartsOn,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    weekStartsOn: 'monday'
   })
   const [isLoading, setIsLoading] = useState(true)
 
+  const router = useRouter();
+  // getting github logged in auth details from next-auth session hook
+  // this contains currently logged in user name, email and avatar of github in session.
+  const { data: session, status } = useSession();
+
   useEffect(() => {
+    // If session is undefined and not loading, redirect to login
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+      return;
+    }
+
     // Load preferences from localStorage
     const stored = localStorage.getItem('devtrackr-preferences')
     if (stored) {
@@ -49,10 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Set mock user for development
-    setUser(MOCK_USER)
     setIsLoading(false)
-  }, [])
+  }, [status, router])
 
   const updatePreferences = (prefs: Partial<UserPreferences>) => {
     const updated = { ...preferences, ...prefs }
@@ -67,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, preferences, updatePreferences, logout, isLoading }}
+      value={{ user, preferences, updatePreferences, logout, isLoading, session }}
     >
       {children}
     </AuthContext.Provider>
