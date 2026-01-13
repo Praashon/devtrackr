@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { MainNav } from './MainNav'
 import { UserMenu } from './UserMenu'
+import { signOut } from "next-auth/react";
 
 export interface NavigationItem {
     label: string
@@ -34,6 +35,12 @@ export function AppShell({
 }: AppShellProps) {
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+    // redirect to login page after logout
+    const handleLogout = () => {
+        // next-auth signout from github and redirect to /login
+        signOut({ callbackUrl: '/login' })
+    };
 
     return (
         <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
@@ -71,7 +78,7 @@ export function AppShell({
                     <UserMenu
                         user={user}
                         collapsed={sidebarCollapsed}
-                        onLogout={onLogout}
+                        onLogout={handleLogout}
                     />
                 )}
             </aside>
